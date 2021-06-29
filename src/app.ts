@@ -12,13 +12,18 @@ interface TemperatureSummary {
   low: number
   average: number
 }
-/* dictionary of dictionarys for the summarys, i use a counter for  */
+/* dictionary of dictionarys for the summarys, i use a nMeasures for know the quantity of measures 
+per day and get the average per (City,Date) */
 interface IndexedSumary {
   [city: string]: {
-    [time: string]: {
+    [time: number]: {
       summary: TemperatureSummary
-      count: number
+      nMeasures: number
+      sumMeasures: number
     }
+    histSummary: TemperatureSummary
+    nMeasures: number
+    sumMeasures: number
   }
 }
 const temperatures: IndexedSumary = {}
@@ -31,12 +36,21 @@ export function processReadings(readings: TemperatureReading[]): void {
   i used for of instead of reduce because its faster as far as I have been able to research
   and 1 loop does less comparations than 3*/
   for (const read of readings) {
-    const readTimeToString: string = read.time.toString()
     if (temperatures[read.city] == undefined) {
-      temperatures[read.city] = {}
+      temperatures[read.city] = {
+        histSummary: {
+          first: read.temperature, // if the key doesn't had an assigned value then it's the first measure
+          last: read.temperature,
+          high: read.temperature,
+          low: read.temperature,
+          average: read.temperature,
+        },
+        nMeasures: 1,
+        sumMeasures: read.temperature,
+      }
     }
-    if (temperatures[read.city][readTimeToString] == undefined) {
-      temperatures[read.city][readTimeToString] = {
+    if (temperatures[read.city][read.time.getTime()] == undefined) {
+      temperatures[read.city][read.time.getTime()] = {
         summary: {
           first: read.temperature, // if the key doesn't had an assigned value then it's the first measure
           last: read.temperature,
@@ -44,29 +58,37 @@ export function processReadings(readings: TemperatureReading[]): void {
           low: read.temperature,
           average: read.temperature,
         },
-        count: 1,
+        nMeasures: 1,
+        sumMeasures: read.temperature,
       }
     } else {
-      const tempAux: TemperatureSummary =
-        temperatures[read.city][readTimeToString].summary
+      // here inferes the type and there's no need for specify it
+      const tempAux = temperatures[read.city][read.time.getTime()]
       //each measure would be the last if there is no other new
-      tempAux.last = read.temperature
-      //we update the higher measure if it's necesary
-      if (tempAux.high < read.temperature) tempAux.high = read.temperature
-      //we update the lower measure if it's necesary
-      else if (tempAux.low > read.temperature) tempAux.low = read.temperature
-      //we add up all the values for the average
-      tempAux.average += read.temperature
-      //we count the values for the average
-      temperatures[read.city][readTimeToString].count++
+      tempAux.summary.last = read.temperature
+      //we update the highest measure if it's necesary
+      if (tempAux.summary.high < read.temperature)
+        tempAux.summary.high = read.temperature
+      //we update the lowest measure if it's necesary
+      else if (tempAux.summary.low > read.temperature)
+        tempAux.summary.low = read.temperature
+      //we add up all the values (per City and Date) for the average
+      tempAux.sumMeasures += read.temperature
+      //we count the values (per City and Date) for the average
+      tempAux.nMeasures++
+      //we update the average with the new values of sum and n measures
+      tempAux.summary.average = tempAux.sumMeasures / tempAux.nMeasures
     }
-  }
-  //we update the average knowing the sum of all measures of a day and the count of these
-  for (const keyCity in temperatures) {
-    for (const keyTime in temperatures[keyCity]) {
-      temperatures[keyCity][keyTime].summary.average /=
-        temperatures[keyCity][keyTime].count
-    }
+    //the same code but for the city historical
+    const tempAux = temperatures[read.city]
+    tempAux.histSummary.last = read.temperature
+    if (tempAux.histSummary.high < read.temperature)
+      tempAux.histSummary.high = read.temperature
+    else if (tempAux.histSummary.low > read.temperature)
+      tempAux.histSummary.low = read.temperature
+    tempAux.sumMeasures += read.temperature
+    tempAux.nMeasures++
+    tempAux.histSummary.average = tempAux.sumMeasures / tempAux.nMeasures
   }
 }
 
@@ -75,11 +97,10 @@ export function getTemperatureSummary(
   city: string,
 ): TemperatureSummary | null {
   //add here your code
-  if (temperatures[city] == undefined) {
-    return null
-  }
-  if (temperatures[city][date.toString()] == undefined) {
-    return null
-  }
-  return temperatures[city][date.toString()].summary
+  return temperatures[city]?.[date.getTime()]?.summary ?? null
+}
+
+export function getHistoricalSummary(city: string): TemperatureSummary | null {
+  //add here your code
+  return temperatures[city]?.histSummary ?? null
 }
